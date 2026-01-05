@@ -1,14 +1,11 @@
 package services;
 
 import models.BankAccount;
+import dbConnect.DatabaseConnection;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.FileNotFoundException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Scanner;
 
 public class BankServices {
 
@@ -16,6 +13,8 @@ public class BankServices {
 
     public BankServices() {
         this.accounts = new ArrayList<>();
+        DatabaseConnection.createTable();  // ✅ Create table on startup
+        loadAccountsFromDatabase();        // ✅ Load from database instead of file
     }
 
     public void createAccount(String accountNumber, String fullName, double initialDeposit) {
@@ -30,6 +29,9 @@ public class BankServices {
 
         BankAccount newAccount = new BankAccount(accountNumber, fullName, initialDeposit);
         accounts.add(newAccount);
+
+        // ✅ Save to database immediately
+        saveAccountToDatabase(newAccount);
 
         System.out.println("Account created successfully!");
         System.out.println("Account Number: " + accountNumber);
@@ -50,68 +52,82 @@ public class BankServices {
         return accounts;
     }
 
-    public void saveAccountsToFile() {
-        try (FileWriter writer = new FileWriter("accounts.txt")) {
+    // ✅ NEW: Save single account to database
+    public void saveAccountToDatabase(BankAccount account) {
+        String sql = "INSERT OR REPLACE INTO accounts (account_number, account_holder_name, balance) VALUES (?, ?, ?)";
 
-            for (BankAccount account : accounts) {
-                writer.write(
-                        account.getAccountNumber() + "," +
-                                account.getAccountHolderName() + "," +
-                                account.getBalance()
-                );
-                writer.write("\n");
-            }
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            System.out.println("Accounts saved successfully.");
+            pstmt.setString(1, account.getAccountNumber());
+            pstmt.setString(2, account.getAccountHolderName());
+            pstmt.setDouble(3, account.getBalance());
+            pstmt.executeUpdate();
 
-        } catch (IOException e) {
-            System.out.println("Error saving accounts: " + e.getMessage());
+        } catch (SQLException e) {
+            System.out.println("Error saving account: " + e.getMessage());
         }
     }
 
-    public void loadAccountsFromFile() {
-        File file = new File("accounts.txt");
+    // ✅ NEW: Update account balance in database
+    public void updateAccountBalance(BankAccount account) {
+        String sql = "UPDATE accounts SET balance = ? WHERE account_number = ?";
 
-        if (!file.exists()) {
-            System.out.println("No accounts file found. Starting fresh.");
-            return;
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setDouble(1, account.getBalance());
+            pstmt.setString(2, account.getAccountNumber());
+            pstmt.executeUpdate();
+
+        } catch (SQLException e) {
+            System.out.println("Error updating balance: " + e.getMessage());
         }
+    }
 
-        try (Scanner scanner = new Scanner(file)) {
+    // ✅ REPLACED: Load from database instead of file
+    public void loadAccountsFromDatabase() {
+        String sql = "SELECT * FROM accounts";
 
-            while (scanner.hasNextLine()) {
-                String line = scanner.nextLine();
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
 
-                if (line.trim().isEmpty()) {
-                    continue;
-                }
+            while (rs.next()) {
+                String accountNumber = rs.getString("account_number");
+                String name = rs.getString("account_holder_name");
+                double balance = rs.getDouble("balance");
 
-                String[] parts = line.split(",");
-
-                if (parts.length != 3) {
-                    System.out.println("Skipping invalid line: " + line);
-                    continue;
-                }
-
-                String accountNumber = parts[0].trim();
-                String accountHolderName = parts[1].trim();
-                double balance = Double.parseDouble(parts[2].trim());
-
-                BankAccount account = new BankAccount(
-                        accountNumber,
-                        accountHolderName,
-                        balance
-                );
-
+                BankAccount account = new BankAccount(accountNumber, name, balance);
                 accounts.add(account);
             }
 
-            System.out.println("Successfully loaded " + accounts.size() + " accounts from file.");
+            System.out.println("Loaded " + accounts.size() + " accounts from database.");
 
-        } catch (FileNotFoundException e) {
-            System.out.println("File not found: " + e.getMessage());
-        } catch (NumberFormatException e) {
-            System.out.println("Invalid number format in file: " + e.getMessage());
+        } catch (SQLException e) {
+            System.out.println("Error loading accounts: " + e.getMessage());
         }
     }
+
+    public void saveAllAccountsToDatabase() {
+        for (BankAccount acc : accounts) {
+            saveAccountToDatabase(acc);
+        }
+    }
+
+
+    // ⚠️ KEEPING OLD METHODS FOR BACKWARD COMPATIBILITY (optional)
+    // You can remove these if you don't need file support anymore
+/*
+    public void saveAccountsToFile() {
+        // This method is now deprecated - using database instead
+        System.out.println("File saving is deprecated. Using database storage.");
+    }
+
+    public void loadAccountsFromFile() {
+        // This method is now deprecated - using database instead
+        System.out.println("File loading is deprecated. Using database storage.");
+    }
+
+ */
 }
