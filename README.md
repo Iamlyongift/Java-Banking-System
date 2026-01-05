@@ -34,12 +34,12 @@ Installation
 
 Clone the repository:
 
-git clone https://github.com/yourusername/your-app.git
+git clone https://github.com/Iamlyongift/Java-Banking-System.git
 
 
 Navigate to the project folder:
 
-cd your-app
+cd Java-Banking-System
 
 
 Compile the Java files:
